@@ -1,6 +1,8 @@
+#It is recommended to view and edit this file in notepad++
+
 #MSR 0x00000010 (bit 27) when set moves all RAM to virtual space 0x80000000
 
-.set _handler_end, 0x8000206C
+.set _handler_end, 0x8000206C 		#Change this to whatever the end of the codehandler is when you add/take away ASM
 
 gameid:
 .long 0,0
