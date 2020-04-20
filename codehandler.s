@@ -139,9 +139,7 @@ found_codes:
 		blt+ RAM_WRITE 			#Code type 0: Write
 	.endif
 	
-	.if (ifStatement == TRUE)
-		beq+ IF_STATEMENT 		#Code type 1: Conditional
-	.endif
+	beq+ IF_STATEMENT 		#Code type 1: Conditional
 	
 	cmpwi r10, 3
 	.if (baseAddress == TRUE)
