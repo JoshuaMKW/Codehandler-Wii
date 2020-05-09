@@ -786,6 +786,7 @@ _hook1:
 	bne- cr7, _skip_and_align
 	sub	r9, r15, r12			#r9 = to-from
 	rlwimi r5, r9, 0, 6, 29		#r5  = (r9 AND 0x03FFFFFC) OR 0x48000000
+	rlwimi r5, r3, 0, 31, 31	#restore lr bit
 	bl store_word				#stores b at the hook place (over original instruction)
 	addi r11, r12, 4
 	add	r12, r15, r4
