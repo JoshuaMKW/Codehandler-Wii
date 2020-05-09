@@ -762,16 +762,16 @@ _skip_and_align:
 	
 _hook_addresscheck:
 	cmpwi cr4, r5, 3
+	cmpwi cr6, r5, 2
 	bgt cr4, _addresscheck1		#lf sub code type == 6 or 7
-	cmpwi r5, 2			#If sub code type == 2
-	bne +0x8
+	bne cr6, +0x8			#If sub code type == 2
 	
 	ori r3, r3, 1			#set lr bit
 	
 	lis r5, 0x4800				#Set up branch instruction
 	add r12, r3, r12
 	rlwinm r12, r12, 0, 0, 29	#align address
-	bne- cr4,_hook1			#lf sub code type ==2
+	bne- cr4,_hook1			#lf sub code type == 2
 
 _hook2:
 	bne- cr7, found_codes
@@ -792,6 +792,11 @@ _hook1:
 	subi r12, r12, 4			#r12 = address of the last instruction of the hook1 code
 	sub	r9, r11, r12
 	rlwimi r5, r9, 0, 6, 29		#r5  = (r9 AND 0x03FFFFFC) OR 0x48000000
+	bne cr6 +0xC
+	
+	lis r5, 0x4E80
+	ori r5, r5, 0x0020
+	
 	bl store_word				#stores b at the last word of the hook1 code
 	b _skip_and_align
 	
