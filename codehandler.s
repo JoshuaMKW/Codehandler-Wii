@@ -762,7 +762,11 @@ _skip_and_align:
 	
 _hook_addresscheck:
 	cmpwi cr4, r5, 3
-	bgt cr4, _addresscheck1		#lf sub code type ==6 or 7
+	bgt cr4, _addresscheck1		#lf sub code type == 6 or 7
+	cmpwi r5, 2			#If sub code type == 2
+	bne +0x8
+	
+	ori r3, r3, 1			#set lr bit
 	
 	lis r5, 0x4800				#Set up branch instruction
 	add r12, r3, r12
