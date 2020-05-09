@@ -792,7 +792,7 @@ _hook1:
 	subi r12, r12, 4			#r12 = address of the last instruction of the hook1 code
 	sub	r9, r11, r12
 	rlwimi r5, r9, 0, 6, 29		#r5  = (r9 AND 0x03FFFFFC) OR 0x48000000
-	bne cr6 +0xC
+	bne cr6, +0xC
 	
 	lis r5, 0x4E80
 	ori r5, r5, 0x0020
