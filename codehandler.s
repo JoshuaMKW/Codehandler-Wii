@@ -5,7 +5,7 @@
 # 0xFFFC0000 bit 0-12 = -RESERVED-
 # 0x00020000 bit 13 = Power Management
 # 0x00010000 bit 15 = Exception Endian Mode
-# 0x00008000 bit 16 = Extrenal Interupts
+# 0x00008000 bit 16 = External Interrupts
 # 0x00004000 bit 17 = Privilege Level
 # 0x00002000 bit 18 = Floating Point Enable
 # 0x00001000 bit 19 = Machine Check
