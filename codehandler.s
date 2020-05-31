@@ -162,11 +162,7 @@ found_codes:
 	cmpwi r10, 7
 	blt+ ASM 				#Code type 6: Our baby, the ultimate code type
 	
-	.if (fSearch == TRUE)	
-		b SEARCH_AND_END 			#Code type 7: Misc/End of codelist
-	.else
-		b escape
-	.endif
+	b SEARCH_AND_END 			#Code type 7: Misc/End of codelist
 
 store_word:
 	lwz r18, 0 (r12)
@@ -952,6 +948,31 @@ _onoff_end:
 			cmpw r24, r25
 			bne _goBackToHandler
 			b ASM
+		
+	_notTerminator:
+		bne	cr4, +12				#check lf sub code type == 0
+		li r8, 0					#clear whole code execution status lf T=0
+		b +20
+
+		rlwinm.	r9, r3, 0, 27, 31	#extract VV
+		rlwinm	r5, r3, 12, 31, 31	#extract "else" bit
+		srw	r8,r8,r9				#r8>>VV, meaning endlf VV lfs
+		rlwinm. r23,r8,31,31,31
+		bne _load_baseaddress		# execution is false if code execution >>, so don't invert code status
+		xor	r8,r8,r5				#lf 'else' is set then invert current code status
+
+	_load_baseaddress:
+		rlwinm.	r5,r4,0,0,15
+		beq	+8
+		mr	r6,r5					#base address = r4
+		rlwinm.	r5,r4,16,0,15
+		beq	+8
+		mr	r16,r5					#pointer = r4
+		b found_codes
+.else
+	SEARCH_AND_END:
+		cmpwi r11, 0				#lf code type = 0xF
+		bne escape
 		
 	_notTerminator:
 		bne	cr4, +12				#check lf sub code type == 0
