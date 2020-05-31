@@ -732,6 +732,7 @@ store_if_flag:
 #===============================================================================
 #execute     (0) : C0000000 NNNNNNNN = execute
 #hook1       (1) : C2XXXXXX NNNNNNNN = insert instructions at XXXXXX
+#hook bl     (2) : C4XXXXXX NNNNNNNN = insert instructions at XXXXXX with a bl
 #hook2       (3) : C6XXXXXX YYYYYYYY = branch from XXXXXX to YYYYYYYY
 #on/off      (6) : CC000000 00000000 = on/off switch
 #range check (7) : CE000000 XXXXYYYY = is ba/po in XXXX0000-YYYY0000
