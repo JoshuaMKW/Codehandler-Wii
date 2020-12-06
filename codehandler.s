@@ -22,6 +22,13 @@
 # 0x00000002 bit 30 = Recoverable Exception
 # 0x00000001 bit 31 = Little-Endian mode
 
+.set BaseAddress, 6
+.set InfoTable, 7
+.set ExecutionStatus, 8
+.set CodeAddr, 15
+.set PointerAddress, 16
+.set BroadwayData, 20
+
 .set ramWrite, TRUE
 .set baseAddress, TRUE
 .set flowControl, TRUE
@@ -29,7 +36,7 @@
 .set endAndIf, TRUE
 .set fSearch, TRUE
 
-.set _handler_end, 0x800018A8 + (regbuffer - file_start)
+.set _handler_end, 0x80001800 + regbuffer
 
 gameid:
 .long 0,0
@@ -56,7 +63,7 @@ cheatdata:
 .endm
 
 .macro pop_stack
-	sth r28, 0x4010 (r20)
+	sth r28, 0x4010 (BroadwayData)
 	lfd f2, 0xD0 (r1)
 	lfd f1, 0xC8 (r1)
 	lfd f0, 0xC0 (r1)
@@ -79,8 +86,8 @@ cheatdata:
 	blr
 .endm
 
-.set codeplace, 0x800018A8 + (codelist - file_start)
-.set header, 0x80001808
+.set codeplace, 0x80001800 + codelist
+.set regpointer, 0x80001800 + cheatdata
 .set broadway, 0xCC00
 
 #START
@@ -90,47 +97,47 @@ file_start:
 push_stack
 
 lis r31, codeplace@h
-lis r20, broadway
+lis BroadwayData, broadway
 
-lhz r28, 0x4010 (r20)
+lhz r28, 0x4010 (BroadwayData)
 ori r21, r28, 0xFF
-sth r21, 0x4010 (r20) 		#Disable MP3 memory protection
+sth r21, 0x4010 (BroadwayData) 		#Disable MP3 memory protection
 
-lis r15, 0x8000 			#Intentional extra instruction
-ori r15, r15, codeplace@l
-ori r7, r31, header@l
-mr r6, r31
-mr r16, r31
-li r8, 0
+lis CodeAddr, codeplace@h 			#Intentional extra instruction
+ori CodeAddr, CodeAddr, codeplace@l
+ori InfoTable, r31, regpointer@l
+mr BaseAddress, r31
+mr PointerAddress, r31
+li ExecutionStatus, 0
 lis r3, 0xD0
 ori r3, r3, 0xC0DE
-lwz r4, 0 (r15)
+lwz r4, 0 (CodeAddr)
 cmpw r3, r4
 bne- escape
-lwz r4, 0x4 (r15)
+lwz r4, 0x4 (CodeAddr)
 cmpw r3, r4
-addi r15, r15, 8
-beq+ found_codes
+addi CodeAddr, CodeAddr, 8
+beq+ read_codes
 
 escape:
 	pop_stack
 	isync
 	blr
 
-found_codes:
-	lwz r3, 0 (r15)
-	lwz r4, 0x4 (r15)
-	addi r15, r15, 0x8
-	andi. r9, r8, 0x1
+read_codes:
+	lwz r3, 0 (CodeAddr)
+	lwz r4, 0x4 (CodeAddr)
+	addi CodeAddr, CodeAddr, 0x8
+	andi. r9, ExecutionStatus, 0x1
 	cmpwi cr7, r9, 0
 	li r9, 0
 	rlwinm r10, r3, 3, 29, 31 	#Extract Codetype
 	rlwinm r5, r3, 7, 29, 31 	#Extract Sub type
 	andis. r11, r3, 0x1000 		#Test Pointer
 	rlwinm r3, r3, 0, 7, 31 	#Extract Base Offset
-	mr r12, r16
+	mr r12, PointerAddress
 	bne- greater 				#Pointer in use
-	rlwinm r12, r6, 0, 0, 6
+	rlwinm r12, BaseAddress, 0, 0, 6
 	greater:
 	cmpwi cr4, r5, 0 			#Compares sub code type with 0 in cr4
 	
@@ -203,7 +210,7 @@ set_cache:
 		cmpwi r5, 3
 		beq- move_r9
 		bgt- next_line
-		bne cr7, found_codes
+		bne cr7, read_codes
 		cmpwi cr4, r5, 1
 		bgt+ cr4, word_store
 		rlwinm r10, r4, 16, 16, 31
@@ -220,13 +227,13 @@ set_cache:
 	sub_timer:
 		subic. r10, r10, 1
 		bge- store_loop
-		b found_codes
+		b read_codes
 
 	word_store:
 		rlwinm r12, r12, 0, 0, 29 	#Make Aligned
 		mr r5, r4
 		bl store_word
-		b found_codes
+		b read_codes
 
 	move_r9:
 		mr r9, r4
@@ -236,17 +243,17 @@ set_cache:
 	loop_two:
 		subic. r9, r9, 1
 		blt- _skip_and_align
-		lbzx r5, r9, r15
+		lbzx r5, r9, CodeAddr
 		mr r4, r5
 		bl store_byte
 		mr r4, r22
 		b loop_two
 
 	next_line:
-		addi r15, r15, 8
-		bne cr7, found_codes
-		lwz r5, -0x8 (r15)
-		lwz r11, -0x4 (r15)
+		addi CodeAddr, CodeAddr, 8
+		bne cr7, read_codes
+		lwz r5, -0x8 (CodeAddr)
+		lwz r11, -0x4 (CodeAddr)
 		rlwinm r17, r5, 0, 16, 31
 		rlwinm r10, r5, 16, 20, 31
 		rlwinm r5, r5, 4, 28, 31
@@ -267,7 +274,7 @@ set_cache:
 		add r9, r9, r17
 		subic. r10, r10, 1
 		bge+ loop_three
-		b found_codes
+		b read_codes
 .endif
 
 #CT1=============================================================================
@@ -279,14 +286,14 @@ set_cache:
 IF_STATEMENT:
 	rlwinm r9, r3, 0, 31, 31 	#r3 = (bit31 & 1) (endif enabled?)
 	beq- not_endif 				#Endif not enabled
-	rlwinm r8, r8, 31, 1, 31 	#Endif (r8>>1)
-	andi. r9, r8, 0x1 			#r9 = Code execution status
+	rlwinm ExecutionStatus, ExecutionStatus, 31, 1, 31 	#Endif (ExecutionStatus>>1)
+	andi. r9, ExecutionStatus, 0x1 			#r9 = Code execution status
 	cmpwi cr7, r9, 0 			#Check execution status
 	
 not_endif:
 	cmpwi cr5, r5, 4 			#Subtype 4
 	cmpwi cr3, r10, 5 			#Maintype 5
-	rlwimi r8, r8, 1, 0, 30 	#r8<<1 and current execution status = old execution status
+	rlwimi ExecutionStatus, ExecutionStatus, 1, 0, 30 	#ExecutionStatus<<1 and current execution status = old execution status
 	bne- cr7, go_loop 			#lf code execution is set to false -> exit
 	bgt- cr3, _addresscheck2 	#lf code type==6 -> address check
 	add r12, r12, r3 			#address = (ba/po)+(XXXXXX)
@@ -332,16 +339,16 @@ less_than_statement:
 	blt- cr6, go_loop 			#If less than
 
 _skip:
-	ori r8, r8, 0x1 			#r8|=1 (execution status set to false)
+	ori ExecutionStatus, ExecutionStatus, 0x1 			#ExecutionStatus|=1 (execution status set to false)
 
 go_loop:
-	bne+ cr3, found_codes 		#lf code type <> 5
-	blt+ cr5, found_codes
-	lwz r11, -0x8 (r15) 		#load counter
+	bne+ cr3, read_codes 		#lf code type <> 5
+	blt+ cr5, read_codes
+	lwz r11, -0x8 (CodeAddr) 		#load counter
 	bne- cr7, store_false_flag 	#lf previous code execution false clear counter
 	andi. r12, r3, 0x8 			#else lf clear counter bit not set increase counter
 	beq- set_true_flag
-	andi. r12, r8, 0x1 			#else lf.. code result true clear counter
+	andi. r12, ExecutionStatus, 0x1 			#else lf.. code result true clear counter
 	beq- store_false_flag
 
 set_true_flag: 					#else increase the counter
@@ -353,8 +360,8 @@ store_false_flag:
 	rlwinm r11, r11, 0, 28, 11 	#clear the counter
 
 store_if_flag:
-	stw r11, -0x8 (r15) 		#save counter
-	b found_codes
+	stw r11, -0x8 (CodeAddr) 		#save counter
+	b read_codes
 
 #CT2============================================================================
 
@@ -373,7 +380,7 @@ store_if_flag:
 
 .if (baseAddress == TRUE)
 	BASE_ADDRESS:
-		bne cr7, found_codes
+		bne cr7, read_codes
 		rlwinm r9, r3, 2, 26, 29	#r9  = extract N, makes N*4
 		rlwinm r14, r3, 16, 31, 31	#r3 = add ba/po flag bit (Y)
 		cmpwi cr3, r14, 0
@@ -385,14 +392,14 @@ store_if_flag:
 
 	_psect3:
 		extsh r4, r3
-		add r4, r4, r15				#r4=XXXXXXXX+r15 (code location in memory)
+		add r4, r4, CodeAddr				#r4=XXXXXXXX+CodeAddr (code location in memory)
 		b _pend
 		
 	_sect1:
 		rlwinm. r5, r3, 20, 31, 31	#r3 = rN use bit (Z)
 		beq +12						#flag is not set(=0), address = XXXXXXXX
 		
-			lwzx r9, r7, r9			#r9 = load register N
+			lwzx r9, InfoTable, r9			#r9 = load register N
 			add r4, r4, r9			#flag is set (=1), address = XXXXXXXX+rN
 		
 		beq cr3, +8					#(Y) flag is not set(=0), address = XXXXXXXX (+rN)
@@ -409,35 +416,35 @@ store_if_flag:
 		
 		bge cr4, +12
 		
-			add r4, r4, r6			#ba += XXXXXXXX (+rN) + (ba/po)
+			add r4, r4, BaseAddress			#ba += XXXXXXXX (+rN) + (ba/po)
 			b _pend
 			
-		add r4, r4, r16				#po += XXXXXXXX (+rN) + (ba/po)
+		add r4, r4, PointerAddress				#po += XXXXXXXX (+rN) + (ba/po)
 		b _pend
 		
 	_sect2:
 		rlwinm. r5, r3, 20, 31, 31	#r3 = rN use bit (Z)
 		beq +12						#flag is not set(=0), address = XXXXXXXX
 		
-			lwzx r9, r7, r9			#r9 = load register N
+			lwzx r9, InfoTable, r9			#r9 = load register N
 			add r4, r4, r9			#flag is set (=1), address = XXXXXXXX+rN
 			
 		bge cr4, +12
 		
-			stwx r6, r12, r4		#[(ba/po)+XXXXXXXX] = base address
-			b found_codes
+			stwx BaseAddress, r12, r4		#[(ba/po)+XXXXXXXX] = base address
+			b read_codes
 			
-		stwx r16, r12, r4			#[(ba/po)+XXXXXXXX] = pointer
-		b found_codes
+		stwx PointerAddress, r12, r4			#[(ba/po)+XXXXXXXX] = pointer
+		b read_codes
 		
 	_pend:
 		bge cr4, +12
 		
-			mr r6, r4
-			b found_codes			#store result to base address
+			mr BaseAddress, r4
+			b read_codes			#store result to base address
 			
-		mr r16, r4					#store result to pointer
-		b found_codes
+		mr PointerAddress, r4					#store result to pointer
+		b read_codes
 .endif
 
 #CT3============================================================================
@@ -458,11 +465,11 @@ store_if_flag:
 		beq _b_bl_blr
 		bgt +8
 		b _b_bl_blr_nocheck			#S=2/3, always skip (code exec status turned to true)
-		beq- cr7, found_codes		#S=1, skip lf false, don't skip lf true
+		beq- cr7, read_codes		#S=1, skip lf false, don't skip lf true
 		b _b_bl_blr_nocheck
 		
 	_b_bl_blr:
-		bne- cr7, found_codes
+		bne- cr7, read_codes
 		
 	_b_bl_blr_nocheck:
 		cmpwi r5, 3
@@ -470,36 +477,36 @@ store_if_flag:
 		beq+ _b						#sub code type ==3, b
 		
 	_blr:
-		lwzx r15, r7, r9			#loads the next code address
-		b found_codes
+		lwzx CodeAddr, InfoTable, r9			#loads the next code address
+		b read_codes
 		
 	_bl:
-		stwx r15, r7, r9			#stores the next code address in block P's address
+		stwx CodeAddr, InfoTable, r9			#stores the next code address in block P's address
 	_b:
 		extsh r4,r3					#XXXX becomes signed
 		rlwinm r4, r4, 3, 9, 28
-		add r15, r15, r4			#next code address +/-=line XXXX
-		b found_codes
+		add CodeAddr, CodeAddr, r4			#next code address +/-=line XXXX
+		b read_codes
 		
 	_repeat:
-		bne- cr7, found_codes		#lf code execution set to false skip code
-		add r5, r7, r9				#r5 points to P address
+		bne- cr7, read_codes		#lf code execution set to false skip code
+		add r5, InfoTable, r9				#r5 points to P address
 		bne- cr4, _execute_repeat	#branch lf sub code type == 1
 		
 	_set_repeat:
 		rlwinm r4, r3, 0, 16, 31	#r4  = extract NNNN
-		stw r15, 0 (r5)				#store current code address to [bP's address]
+		stw CodeAddr, 0 (r5)				#store current code address to [bP's address]
 		stw r4, 0x4 (r5)			#store NNNN to [bP's address+4]
-		b found_codes
+		b read_codes
 		
 	_execute_repeat:
 		lwz r9, 0x4 (r5)			#load NNNN from [M+4]
 		cmpwi r9, 0
-		beq- found_codes
+		beq- read_codes
 		subi r9, r9, 1
 		stw r9, 0x4 (r5)			#saves (NNNN-1) to [bP's address+4]
-		lwz r15, 0 (r5)				#load next code address from [bP's address]
-		b found_codes
+		lwz CodeAddr, 0 (r5)				#load next code address from [bP's address]
+		b read_codes
 .endif
 
 #CT4============================================================================
@@ -518,9 +525,9 @@ store_if_flag:
 
 .if (geckoRegister == TRUE)
 	GECKO_REGISTER:
-		bne cr7, found_codes
+		bne cr7, read_codes
 		rlwinm r11, r3, 2, 26, 29 	#r11  = extract N, makes N*4
-		add r26, r7, r11 			#1st value address = rN's address
+		add r26, InfoTable, r11 			#1st value address = rN's address
 		lwz r9, 0 (r26) 			#r9 = rN
 		rlwinm r14, r3, 12, 30, 31 	#extracts S, U, T (3bits)
 		beq cr4, distant 			#lf sub code type = 0
@@ -574,7 +581,7 @@ store_if_flag:
 		addi r12, r12, 4
 		subic. r19, r19, 1
 		bge+ yet_another_loop
-		b found_codes
+		b read_codes
 
 	distant:
 		rlwinm. r5, r3, 16, 31, 31 	#+(ba/po) flag : Y
@@ -590,9 +597,9 @@ store_if_flag:
 	farther_away:
 		rlwinm r10, r3, 16, 30, 31
 		rlwinm r14, r4, 2, 26, 29
-		add r19, r7, r14
+		add r19, InfoTable, r14
 		bne- cr4, not_negative_align
-		subi r19, r15, 4
+		subi r19, CodeAddr, 4
 
 	not_negative_align:
 		lwz r4, 0 (r26) 			#Stored value
@@ -632,11 +639,11 @@ store_if_flag:
 			sraw r4, r9, r4			#N asr M
 		store_gecko:
 			stw r4, 0 (r26)			#Store result in rN/[rN]
-		b found_codes
+		b read_codes
 
 	check_floats:
 		cmpwi r5, 10
-		bgt+ found_codes
+		bgt+ read_codes
 		lfs f1, 0 (r26) 			#f1 = load 1st value
 		lfs f2, 0 (r19) 			#f2 = load 2nd value
 		fmuls f0, f2, f1			#N = N * M (float)
@@ -644,7 +651,7 @@ store_if_flag:
 		fadds f0, f2, f1			#N = N + M (float)
 	floating_multiply:
 		stfs f2, 0 (r26)			#Store result in rN/[rN]
-		b found_codes
+		b read_codes
 
 	func_call_one:
 		mflr r10
@@ -659,7 +666,7 @@ store_if_flag:
 	#copy2        (6) : 8CYYYYNM XXXXXXXX = copy YYYY bytes from ([rN]+)XXXXXX to [rM]
 
 	very_far_away:
-		bne- cr7, found_codes		#lf code execution set to false skip code
+		bne- cr7, read_codes		#lf code execution set to false skip code
 		rlwinm r9, r3, 24, 0, 31	#r9=r3 ror 8 (NM8AYYYY, NM8CYYYY)
 		mr r14, r12					#r14=(ba/po)
 		bl some_sorta_something
@@ -674,7 +681,7 @@ store_if_flag:
 		rlwinm. r4, r3, 24, 16, 31	#Extracts YYYY, compares it with 0
 		li r5, 0
 	wow_another_loop:
-		beq found_codes			#Loop until all bytes have been copied.
+		beq read_codes			#Loop until all bytes have been copied.
 		lbzx r10, r5, r17
 		stbx r10, r5, r9
 		addi r5, r5, 1
@@ -685,7 +692,7 @@ store_if_flag:
 		cmpwi cr5, r10, 4			#compare code type and 4(rn Operations) in cr5
 		rlwinm r17, r9, 6, 26, 29	#Extracts N*4
 		cmpwi r17, 60
-		lwzx r17, r7, r17			#Loads rN value in r17
+		lwzx r17, InfoTable, r17			#Loads rN value in r17
 		bne- nope_move
 		mr r17, r14					#lf N==0xF then source address=(ba/po)(+XXXXXXXX, CT5)
 	nope_move:
@@ -694,7 +701,7 @@ store_if_flag:
 	nope_load:
 		rlwinm r9, r9, 10, 26, 29	#Extracts M*4
 		cmpwi r9, 60
-		lwzx r9, r7, r9				#Loads rM value in r9
+		lwzx r9, InfoTable, r9				#Loads rM value in r9
 		bne- nono_move
 		mr r9, r14					#lf M==0xF then dest address=(ba/po)(+XXXXXXXX, CT5)
 	nono_move:
@@ -746,16 +753,16 @@ ASM:
 	bne- cr7, _skip_and_align
 	
 _execute:
-	sth r28, 0x4010 (r20)
-	mtlr r15
+	sth r28, 0x4010 (BroadwayData)
+	mtlr CodeAddr
 	blrl						#C0 Execute
-	sth r21, 0x4010 (r20)
+	sth r21, 0x4010 (BroadwayData)
 	
 _skip_and_align:
-	add r15, r4, r15
-	addi r15, r15, 7
-	rlwinm r15, r15, 0, 0, 28 	#Align 64-bit
-	b found_codes
+	add CodeAddr, r4, CodeAddr
+	addi CodeAddr, CodeAddr, 7
+	rlwinm CodeAddr, CodeAddr, 0, 0, 28 	#Align 64-bit
+	b read_codes
 	
 _hook_addresscheck:
 	cmpwi cr4, r5, 3
@@ -771,22 +778,22 @@ _hook_addresscheck:
 	bne- cr4,_hook1			#lf sub code type == 2
 
 _hook2:
-	bne- cr7, found_codes
+	bne- cr7, read_codes
 	rlwinm r4, r26, 0, 0, 29 	#address &=0x01FFFFFC
 	sub r4, r4, r12				#r4 = to-from
 	rlwimi r5, r4, 0, 6, 29		#r5  = (r4 AND 0x03FFFFFC) OR 0x48000000
 	rlwimi r5, r3, 0, 31, 31	#restore lr bit
 	bl store_word				#stores b at the hook place (over original instruction)
-	b found_codes
+	b read_codes
 	
 _hook1:
 	bne- cr7, _skip_and_align
-	sub	r9, r15, r12			#r9 = to-from
+	sub	r9, CodeAddr, r12			#r9 = to-from
 	rlwimi r5, r9, 0, 6, 29		#r5  = (r9 AND 0x03FFFFFC) OR 0x48000000
 	rlwimi r5, r3, 0, 31, 31	#restore lr bit
 	bl store_word				#stores b at the hook place (over original instruction)
 	addi r11, r12, 4
-	add	r12, r15, r4
+	add	r12, CodeAddr, r4
 	subi r12, r12, 4			#r12 = address of the last instruction of the hook1 code
 	sub	r9, r11, r12
 	rlwimi r5, r9, 0, 6, 29		#r5  = (r9 AND 0x03FFFFFC) OR 0x48000000
@@ -811,24 +818,24 @@ _addresscheck2:
 	blt	_skip
 	cmpw r12,r26
 	bge	_skip
-	b found_codes
+	b read_codes
 
 _onoff:
 	rlwinm r5,r26,31,31,31		#extracts old exec status (x b a)
 	xori r5,r5,1
-	andi. r3,r8,1				#extracts current exec status
+	andi. r3,ExecutionStatus,1				#extracts current exec status
 	cmpw r5,r3
 	beq	_onoff_end
-	rlwimi r26,r8,1,30,30
+	rlwimi r26,ExecutionStatus,1,30,30
 	xori r26,r26,2
 	rlwinm.	r5,r26,31,31,31		#extracts b
 	beq	+8
 	xori r26,r26,1
-	stw	r26,-4(r15)				#updates the code value in the code list
+	stw	r26,-4(CodeAddr)				#updates the code value in the code list
 	
 _onoff_end:
-	rlwimi	r8,r26,0,31,31		#current execution status = a
-	b found_codes
+	rlwimi	ExecutionStatus,r26,0,31,31		#current execution status = a
+	b read_codes
 
 #===============================================================================
 #Full terminator  (0) = E0000000 XXXXXXXX = full terminator
@@ -849,7 +856,7 @@ _onoff_end:
 		bne escape
 		
 	_patchType:
-		rlwimi r8, r8, 1, 0, 30		#r8<<1 and current execution status = old execution status
+		rlwimi ExecutionStatus, ExecutionStatus, 1, 0, 30		#ExecutionStatus<<1 and current execution status = old execution status
 		bne	cr7, _exitpatch			#lf code execution is set to false -> exit
 		rlwinm. r23, r3, 22, 0, 1
 		bgt _patchfail
@@ -874,7 +881,7 @@ _onoff_end:
 
 	_patchloopnext:
 		mulli r26, r25, 4
-		lwzx r27, r15, r26
+		lwzx r27, CodeAddr, r26
 		lwzx r26, r23, r26
 		addi r25, r25, 1
 		cmplw r23, r24
@@ -887,35 +894,35 @@ _onoff_end:
 		b _patchloop
 		
 	_foundaddress:
-		lwz r3, -8 (r15)
+		lwz r3, -8 (CodeAddr)
 		ori r3, r3, 0x300
-		stw r3, -8 (r15)
-		stw r23, -4 (r15)
-		mr r16, r23
+		stw r3, -8 (CodeAddr)
+		stw r23, -4 (CodeAddr)
+		mr PointerAddress, r23
 		b _exitpatch
 		
 	_failpatchloop:
-		lwz r3, -8 (r15)
+		lwz r3, -8 (CodeAddr)
 		ori r3, r3, 0x100
-		stw r3, -8 (r15)
+		stw r3, -8 (CodeAddr)
 		
 	_patchfail:
-		ori	r8, r8, 1				#r8|=1 (execution status set to false)
+		ori	ExecutionStatus, ExecutionStatus, 1				#ExecutionStatus|=1 (execution status set to false)
 		b _exitpatch
 		
 	_copytopo:
-		mr r16, r4
+		mr PointerAddress, r4
 		
 	_exitpatch:
 		rlwinm r4, r3, 0, 24, 31 	# set code to number of lines only
 		
 	_goBackToHandler:
 		mulli r4, r4, 8
-		add r15, r4, r15 			# skip the lines of the code
-		b found_codes
+		add CodeAddr, r4, CodeAddr 			# skip the lines of the code
+		b read_codes
 		
 	_asmTypeba:
-		rlwinm r12, r6, 0, 0, 6 	# use base address
+		rlwinm r12, BaseAddress, 0, 0, 6 	# use base address
 		
 	_asmTypepo:
 		rlwinm r23, r4, 8, 24, 31 	# extract number of half words to XOR
@@ -952,15 +959,15 @@ _onoff_end:
 		
 	_notTerminator:
 		bne	cr4, +12				#check lf sub code type == 0
-		li r8, 0					#clear whole code execution status lf T=0
+		li ExecutionStatus, 0					#clear whole code execution status lf T=0
 		b +20
 
 		rlwinm.	r9, r3, 0, 27, 31	#extract VV
 		rlwinm	r5, r3, 12, 31, 31	#extract "else" bit
-		srw	r8,r8,r9				#r8>>VV, meaning endlf VV lfs
-		rlwinm. r23,r8,31,31,31
+		srw	ExecutionStatus,ExecutionStatus,r9				#ExecutionStatus>>VV, meaning endlf VV lfs
+		rlwinm. r23,ExecutionStatus,31,31,31
 		bne _load_baseaddress		# execution is false if code execution >>, so don't invert code status
-		xor	r8,r8,r5				#lf 'else' is set then invert current code status
+		xor	ExecutionStatus,ExecutionStatus,r5				#lf 'else' is set then invert current code status
 
 	_load_baseaddress:
 		rlwinm.	r5,r4,0,0,15
@@ -969,7 +976,7 @@ _onoff_end:
 		rlwinm.	r5,r4,16,0,15
 		beq	+8
 		mr	r16,r5					#pointer = r4
-		b found_codes
+		b read_codes
 .else
 	SEARCH_AND_END:
 		cmpwi r11, 0				#lf code type = 0xF
@@ -977,15 +984,15 @@ _onoff_end:
 		
 	_notTerminator:
 		bne	cr4, +12				#check lf sub code type == 0
-		li r8, 0					#clear whole code execution status lf T=0
+		li ExecutionStatus, 0					#clear whole code execution status lf T=0
 		b +20
 
 		rlwinm.	r9, r3, 0, 27, 31	#extract VV
 		rlwinm	r5, r3, 12, 31, 31	#extract "else" bit
-		srw	r8,r8,r9				#r8>>VV, meaning endlf VV lfs
-		rlwinm. r23,r8,31,31,31
+		srw	ExecutionStatus,ExecutionStatus,r9				#ExecutionStatus>>VV, meaning endlf VV lfs
+		rlwinm. r23,ExecutionStatus,31,31,31
 		bne _load_baseaddress		# execution is false if code execution >>, so don't invert code status
-		xor	r8,r8,r5				#lf 'else' is set then invert current code status
+		xor	ExecutionStatus,ExecutionStatus,r5				#lf 'else' is set then invert current code status
 
 	_load_baseaddress:
 		rlwinm.	r5,r4,0,0,15
@@ -994,7 +1001,7 @@ _onoff_end:
 		rlwinm.	r5,r4,16,0,15
 		beq	+8
 		mr	r16,r5					#pointer = r4
-		b found_codes
+		b read_codes
 .endif
 
 regbuffer:
