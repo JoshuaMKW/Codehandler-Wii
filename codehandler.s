@@ -1,3 +1,7 @@
+.text
+
+.global file_start
+
 #-----------------------------#
 # Machine State Register bits:
 # 0 = Disabled 1 = Enabled
